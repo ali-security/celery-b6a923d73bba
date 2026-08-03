@@ -1,10 +1,12 @@
 from __future__ import absolute_import, unicode_literals
 
 from datetime import datetime, timedelta
+from time import sleep
 
 import pytest
 
 from celery import chain, chord, group
+from celery.backends.base import BaseKeyValueStoreBackend
 from celery.exceptions import TimeoutError
 from celery.result import AsyncResult, GroupResult, ResultSet
 
@@ -284,6 +286,32 @@ def assert_ids(r, expected_value, expected_root_id, expected_parent_id):
 
 
 class test_chord:
+    @flaky
+    def test_simple_chord_with_a_delay_in_group_save(self, manager,
+                                                     monkeypatch):
+        try:
+            manager.app.backend.ensure_chords_allowed()
+        except NotImplementedError as e:
+            raise pytest.skip(e.args[0])
+
+        if not isinstance(manager.app.backend, BaseKeyValueStoreBackend):
+            raise pytest.skip('The delay may only occur in key/value backends')
+
+        x = manager.app.backend._apply_chord_incr
+
+        def apply_chord_incr_with_sleep(*args, **kwargs):
+            sleep(1)
+            x(*args, **kwargs)
+
+        monkeypatch.setattr(BaseKeyValueStoreBackend,
+                            '_apply_chord_incr',
+                            apply_chord_incr_with_sleep)
+
+        c = group(add.si(1, 1), add.si(1, 1)) | tsum.s()
+
+        result = c()
+        assert result.get() == 4
+
     @flaky
     def test_redis_subscribed_channels_leak(self, manager):
         if not manager.app.conf.result_backend.startswith('redis'):

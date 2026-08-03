@@ -747,6 +747,68 @@ class test_chord(CanvasCase):
         x.tasks = [self.add.s(2, 2)]
         x.freeze()
 
+    def test_freeze_header_uses_the_group_id_as_result_id(self):
+        # The frozen header result must be keyed by the very group id the
+        # header tasks are going to be published with, otherwise the group
+        # result the backend stores for the chord cannot be restored by
+        # ``on_chord_part_return`` and the chord fails.
+        g = group([self.add.s(2, 2), self.add.s(4, 4)], app=self.app)
+        assert g.freeze(group_id='some_group_id').id == 'some_group_id'
+
+    def test_saves_group_result_before_publishing_header(self):
+        # The header's group result has to be stored in the result backend
+        # *before* the header tasks are published.  Publishing first leaves a
+        # race window in which a header task may finish, fail to restore the
+        # group result and abort the chord with
+        # ``ChordError: GroupResult ... no longer exists`` -- so the body is
+        # never called.
+        from case import patch
+
+        from celery import states
+        from celery.app.task import Context
+        from celery.backends.cache import CacheBackend
+
+        backend = self.app.backend = CacheBackend(
+            backend='memory://', app=self.app)
+        chord_errors = []
+
+        def record_chord_error(callback, exc=None):
+            chord_errors.append(exc)
+        backend.chord_error_from_stack = record_chord_error
+
+        published, group_ids, body_calls = [], set(), []
+
+        def simulated_worker(sig, args=None, kwargs=None, **options):
+            # Stands in for a worker that runs the task to completion the very
+            # moment the task message is published.
+            opts = dict(sig.options, **options)
+            task_id = opts['task_id']
+            published.append(task_id)
+            sig_chord = opts.get('chord')
+            if sig_chord is None:
+                # not a header task: the backend dispatched the chord body.
+                body_calls.append(args)
+                return self.app.AsyncResult(task_id)
+            group_ids.add(opts.get('group_id'))
+            backend.store_result(task_id, 2, states.SUCCESS)
+            backend.on_chord_part_return(
+                Context(id=task_id, group=opts.get('group_id'),
+                        chord=sig_chord),
+                states.SUCCESS, 2,
+            )
+            return self.app.AsyncResult(task_id)
+
+        with patch.object(Signature, 'apply_async', simulated_worker):
+            res = chord([self.add.s(1, 1), self.add.s(1, 1)],
+                        body=self.mul.s(4), app=self.app)()
+
+        assert chord_errors == []
+        # two header tasks, then the body triggered by the last one of them.
+        assert len(published) == 3
+        assert body_calls == [([2, 2],)]
+        # the group result was saved under the id the header was published with
+        assert group_ids == {res.parent.id}
+
     def test_chain_always_eager(self):
         self.app.conf.task_always_eager = True
         from celery import _state
