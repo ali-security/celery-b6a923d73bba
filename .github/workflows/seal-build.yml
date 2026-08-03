@@ -8,7 +8,7 @@ jobs:
     name: build sdist+wheel and run unit tests (Python 3.7)
     runs-on: ubuntu-22.04
     env:
-      PYTHONUNBUFFERED: "yes"
+      PYTHONUNBUFFERED: yes
       BOTO_CONFIG: /dev/null
       WORKER_LOGLEVEL: INFO
       PYTHONIOENCODING: UTF-8
@@ -21,12 +21,12 @@ jobs:
 
       - name: Install release-era build toolchain
         env:
-          PIP_INDEX_URL: "https://:2019-03-31@time-machines-pypi.sealsecurity.io/"
+          PIP_INDEX_URL: https://:2019-03-31@time-machines-pypi.sealsecurity.io/
         run: python -m pip install "setuptools==40.8.0" "wheel==0.33.1"
 
       - name: Build sdist + wheel
         env:
-          PIP_INDEX_URL: "https://:2019-03-31@time-machines-pypi.sealsecurity.io/"
+          PIP_INDEX_URL: https://:2019-03-31@time-machines-pypi.sealsecurity.io/
         run: python setup.py sdist bdist_wheel
 
       - name: Show built distributions
@@ -37,7 +37,7 @@ jobs:
 
       - name: Install celery test requirements
         env:
-          PIP_INDEX_URL: "https://:2019-03-31@time-machines-pypi.sealsecurity.io/"
+          PIP_INDEX_URL: https://:2019-03-31@time-machines-pypi.sealsecurity.io/
         run: |
           python -m pip install -r requirements/default.txt \
                                 -r requirements/test.txt \
@@ -67,12 +67,12 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
-      PYTHONUNBUFFERED: "yes"
+      PYTHONUNBUFFERED: yes
       BOTO_CONFIG: /dev/null
       WORKER_LOGLEVEL: INFO
       PYTHONIOENCODING: UTF-8
-      TEST_BROKER: "redis://"
-      TEST_BACKEND: "redis://"
+      TEST_BROKER: redis://
+      TEST_BACKEND: redis://
       REDIS_HOST: localhost
     steps:
       - uses: actions/checkout@v4
@@ -83,7 +83,7 @@ jobs:
 
       - name: Install release-era build toolchain
         env:
-          PIP_INDEX_URL: "https://:2019-03-31@time-machines-pypi.sealsecurity.io/"
+          PIP_INDEX_URL: https://:2019-03-31@time-machines-pypi.sealsecurity.io/
         run: python -m pip install "setuptools==40.8.0" "wheel==0.33.1"
 
       - name: Pre-install deps absent from the release-date index mirror
@@ -91,7 +91,7 @@ jobs:
 
       - name: Install celery integration test requirements
         env:
-          PIP_INDEX_URL: "https://:2019-03-31@time-machines-pypi.sealsecurity.io/"
+          PIP_INDEX_URL: https://:2019-03-31@time-machines-pypi.sealsecurity.io/
         run: |
           python -m pip install -r requirements/default.txt \
                                 -r requirements/test.txt \
